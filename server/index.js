@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -173,6 +172,15 @@ io.on('connection', (socket) => {
   // Manejar desconexión
   socket.on('disconnect', () => {
     console.log(`Usuario desconectado: ${socket.user.id}`);
+  });
+});
+
+// Endpoint de verificación del estado del servidor
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    message: 'Server is running', 
+    timestamp: new Date().toISOString() 
   });
 });
 
