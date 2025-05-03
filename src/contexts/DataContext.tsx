@@ -1,13 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { JobType } from './JobContext';
-import {
-  getAllUsers as getFirebaseUsers,
-  getUserById as getFirebaseUserById,
-  getJobCategories as getFirebaseJobCategories,
-  getSkillsList as getFirebaseSkillsList,
-  getAllJobs as getFirebaseJobs
-} from '@/lib/firebaseUtils';
+import { getAllUsers, getJobCategories, getSkillsList, getAllJobs } from '@/lib/api';
 
 // Make sure the UserType in DataContext matches or extends the AuthContext UserType
 export type UserType = {
@@ -20,13 +14,6 @@ export type UserType = {
   photoURL?: string;
   hourlyRate?: number;
   joinedAt?: number;
-};
-
-export type CommentType = {
-  id: string;
-  userId: string;
-  text: string;
-  timestamp: number;
 };
 
 export interface DataContextType {
@@ -60,31 +47,17 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load users
-      const usersData = await getFirebaseUsers();
-      // Convert Firebase users to DataContext UserType
-      const convertedUsers = usersData.map(user => ({
-        id: user.id,
-        name: user.name || "",
-        email: user.email || "",
-        role: user.role as "freelancer" | "client" || "freelancer",
-        bio: user.bio,
-        photoURL: user.photoURL,
-        skills: user.skills,
-        hourlyRate: user.hourlyRate,
-        joinedAt: user.joinedAt
-      }));
-      setUsers(convertedUsers);
+      // Cargamos en paralelo para optimizar
+      const [usersData, jobsData, categories, skills] = await Promise.all([
+        getAllUsers(),
+        getAllJobs(),
+        getJobCategories(),
+        getSkillsList()
+      ]);
       
-      // Load jobs
-      const jobsData = await getFirebaseJobs();
+      setUsers(usersData);
       setJobs(jobsData);
-      
-      // Load categories and skills
-      const categories = await getFirebaseJobCategories();
       setJobCategories(categories);
-      
-      const skills = await getFirebaseSkillsList();
       setSkillsList(skills);
     } catch (error) {
       console.error("Error loading data:", error);

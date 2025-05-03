@@ -1,15 +1,8 @@
+
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
 import { toast } from "@/components/ui/use-toast";
-import { 
-  registerUser, 
-  loginUser, 
-  logoutUser, 
-  updateUserProfile as updateFirebaseUserProfile,
-  uploadUserPhoto
-} from "@/lib/firebaseUtils";
+import { loginUser as apiLoginUser, registerUser as apiRegisterUser, getCurrentUser, updateUserProfile as apiUpdateUserProfile } from "@/lib/api";
+import { initializeSocket, disconnectSocket } from '@/lib/socket';
 
 export type UserType = {
   id: string;
@@ -53,55 +46,56 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            setCurrentUser({
-              id: user.uid,
-              ...userDoc.data() as Omit<UserType, "id">
-            });
-          } else {
-            setCurrentUser({
-              id: user.uid,
-              name: user.displayName || "",
-              email: user.email || "",
-              photoURL: user.photoURL || undefined,
-              role: "freelancer"
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Error al cargar los datos del usuario"
-          });
-        }
-      } else {
+    const checkAuthStatus = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
         setCurrentUser(null);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
-    });
 
-    return () => unsubscribe();
+      try {
+        // Iniciamos la conexión socket con el token
+        initializeSocket(token);
+        
+        // Obtenemos los datos del usuario actual
+        const userData = await getCurrentUser();
+        setCurrentUser(userData);
+      } catch (error) {
+        console.error("Error al verificar estado de autenticación:", error);
+        localStorage.removeItem('token');
+        setCurrentUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuthStatus();
   }, []);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      const user = await loginUser(email, password);
+      const { token, user } = await apiLoginUser(email, password);
+      
+      // Guardar token en localStorage
+      localStorage.setItem('token', token);
+      
+      // Inicializar la conexión Socket.io
+      initializeSocket(token);
+      
       setCurrentUser(user);
+      
       toast({
         title: "Inicio de sesión exitoso",
         description: "Bienvenido a WorkFlowConnect",
       });
     } catch (error) {
+      console.error("Error en login:", error);
       toast({
         variant: "destructive",
         title: "Error de inicio de sesión",
-        description: error instanceof Error ? error.message : "Error al iniciar sesión",
+        description: "Credenciales incorrectas o servidor no disponible",
       });
       throw error;
     } finally {
@@ -112,17 +106,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (email: string, password: string, name: string) => {
     setLoading(true);
     try {
-      const user = await registerUser(email, password, name);
+      const { token, user } = await apiRegisterUser(email, password, name);
+      
+      // Guardar token en localStorage
+      localStorage.setItem('token', token);
+      
+      // Inicializar la conexión Socket.io
+      initializeSocket(token);
+      
       setCurrentUser(user);
+      
       toast({
         title: "Registro exitoso",
         description: "¡Bienvenido a WorkFlowConnect!",
       });
     } catch (error) {
+      console.error("Error en registro:", error);
       toast({
         variant: "destructive",
         title: "Error de registro",
-        description: error instanceof Error ? error.message : "Error al registrar",
+        description: "No se pudo completar el registro. Inténtalo de nuevo.",
       });
       throw error;
     } finally {
@@ -132,13 +135,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await logoutUser();
+      // Desconectar socket
+      disconnectSocket();
+      
+      // Eliminar token
+      localStorage.removeItem('token');
+      
       setCurrentUser(null);
+      
       toast({
         title: "Sesión cerrada",
         description: "Has cerrado sesión correctamente",
       });
     } catch (error) {
+      console.error("Error al cerrar sesión:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -151,13 +161,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!currentUser) throw new Error('No hay usuario autenticado');
     
     try {
-      await updateFirebaseUserProfile(currentUser.id, data);
-      setCurrentUser(prev => prev ? { ...prev, ...data } : null);
+      const updatedUser = await apiUpdateUserProfile(data);
+      setCurrentUser(prev => prev ? { ...prev, ...updatedUser } : null);
+      
       toast({
         title: "Perfil actualizado",
         description: "Tus cambios han sido guardados",
       });
     } catch (error) {
+      console.error("Error al actualizar perfil:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -171,9 +183,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!currentUser) throw new Error('No hay usuario autenticado');
     
     try {
-      console.log("Iniciando proceso de subida de foto de perfil");
-      const photoURL = await uploadUserPhoto(currentUser.id, file);
+      // Crear un FormData para la subida del archivo
+      const formData = new FormData();
+      formData.append('photo', file);
       
+      // Esta función debería implementarse en el backend
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/users/me/photo`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Error al subir la foto');
+      }
+      
+      const data = await response.json();
+      const photoURL = data.photoURL;
+      
+      // Actualizar el usuario con la nueva foto
       setCurrentUser(prev => prev ? { ...prev, photoURL } : null);
       
       toast({
@@ -181,7 +211,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         description: "Tu foto de perfil ha sido actualizada",
       });
       
-      console.log("Foto de perfil actualizada correctamente:", photoURL);
       return photoURL;
     } catch (error) {
       console.error("Error en uploadProfilePhoto:", error);

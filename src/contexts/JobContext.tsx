@@ -4,15 +4,13 @@ import { UserType } from './AuthContext';
 import { 
   getAllJobs, 
   getJobById, 
-  createJob as createFirebaseJob,
-  updateJob as updateFirebaseJob,
-  deleteJob as deleteFirebaseJob,
+  createJob as apiCreateJob,
+  updateJob as apiUpdateJob,
+  deleteJob as apiDeleteJob,
   addCommentToJob, 
-  addReplyToComment as addFirebaseReplyToComment,
-  toggleJobLike as toggleFirebaseJobLike,
-  toggleSavedJob as toggleFirebaseSavedJob,
-  getSavedJobs as getFirebaseSavedJobs
-} from '@/lib/firebaseUtils';
+  addReplyToComment as apiAddReplyToComment
+} from '@/lib/api';
+import axios from 'axios';
 
 export type ReplyType = {
   id: string;
@@ -104,10 +102,9 @@ export const JobProvider: React.FC<JobProviderProps> = ({ children }) => {
 
   const createJob = async (jobData: Omit<JobType, 'id' | 'timestamp' | 'comments' | 'likes'>) => {
     try {
-      const newJob = await createFirebaseJob(jobData);
-      const typedNewJob = newJob as JobType;
-      setJobs(prevJobs => [...prevJobs, typedNewJob]);
-      return typedNewJob;
+      const newJob = await apiCreateJob(jobData);
+      setJobs(prevJobs => [newJob, ...prevJobs]);
+      return newJob;
     } catch (error) {
       console.error("Error creating job:", error);
       throw error;
@@ -116,7 +113,7 @@ export const JobProvider: React.FC<JobProviderProps> = ({ children }) => {
 
   const updateJob = async (jobId: string, jobData: Partial<JobType>) => {
     try {
-      const updatedJob = await updateFirebaseJob(jobId, jobData);
+      const updatedJob = await apiUpdateJob(jobId, jobData);
       
       setJobs(prevJobs => prevJobs.map(job => 
         job.id === jobId ? updatedJob : job
@@ -131,7 +128,7 @@ export const JobProvider: React.FC<JobProviderProps> = ({ children }) => {
 
   const deleteJob = async (jobId: string) => {
     try {
-      const success = await deleteFirebaseJob(jobId);
+      const { success } = await apiDeleteJob(jobId);
       
       if (success) {
         setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
@@ -146,7 +143,7 @@ export const JobProvider: React.FC<JobProviderProps> = ({ children }) => {
 
   const addComment = async (jobId: string, content: string, user: UserType) => {
     try {
-      const newComment = await addCommentToJob(jobId, content, user);
+      const newComment = await addCommentToJob(jobId, content);
       
       setJobs(prevJobs => prevJobs.map(job => 
         job.id === jobId 
@@ -161,9 +158,7 @@ export const JobProvider: React.FC<JobProviderProps> = ({ children }) => {
 
   const addReplyToComment = async (jobId: string, commentId: string, content: string, user: UserType) => {
     try {
-      const newReply = await addFirebaseReplyToComment(jobId, commentId, content, user);
-      
-      if (!newReply) return;
+      const newReply = await apiAddReplyToComment(commentId, content);
       
       setJobs(prevJobs => prevJobs.map(job => {
         if (job.id !== jobId) return job;
@@ -189,7 +184,19 @@ export const JobProvider: React.FC<JobProviderProps> = ({ children }) => {
 
   const toggleSavedJob = async (jobId: string, userId: string) => {
     try {
-      const isNowSaved = await toggleFirebaseSavedJob(userId, jobId);
+      // Esta función deberá implementarse en el backend
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await axios.post(
+        `${API_URL}/users/saved-jobs/${jobId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      );
+      
+      const isNowSaved = response.data.saved;
       
       setSavedJobs(prev => {
         if (isNowSaved) {
@@ -205,7 +212,18 @@ export const JobProvider: React.FC<JobProviderProps> = ({ children }) => {
 
   const getSavedJobs = async (userId: string) => {
     try {
-      const savedJobsData = await getFirebaseSavedJobs(userId);
+      // Esta función deberá implementarse en el backend
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await axios.get(
+        `${API_URL}/users/saved-jobs`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      );
+      
+      const savedJobsData = response.data;
       const savedJobIds = savedJobsData.map(job => job.id);
       setSavedJobs(savedJobIds);
       return savedJobsData;
@@ -217,18 +235,28 @@ export const JobProvider: React.FC<JobProviderProps> = ({ children }) => {
 
   const toggleLike = async (jobId: string, userId: string) => {
     try {
-      await toggleFirebaseJobLike(jobId, userId);
+      // Esta función deberá implementarse en el backend
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await axios.post(
+        `${API_URL}/jobs/${jobId}/likes`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      );
+      
+      const isNowLiked = response.data.liked;
       
       setJobs(prevJobs => prevJobs.map(job => {
         if (job.id !== jobId) return job;
         
-        const userLiked = job.likes.includes(userId);
-        
         return {
           ...job,
-          likes: userLiked
-            ? job.likes.filter(id => id !== userId)
-            : [...job.likes, userId]
+          likes: isNowLiked
+            ? [...job.likes, userId]
+            : job.likes.filter(id => id !== userId)
         };
       }));
     } catch (error) {
