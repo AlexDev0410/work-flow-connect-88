@@ -11,6 +11,7 @@ export type MessageType = {
   senderId: string;
   content: string;
   timestamp: number;
+  chatId: string;
 };
 
 export type ChatType = {
