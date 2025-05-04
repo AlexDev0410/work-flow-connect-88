@@ -19,10 +19,10 @@ exports.register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     
-    // Crear usuario
+    // Crear usuario - establecer un único rol para todos
     const result = await pool.query(
       'INSERT INTO users (email, password, name, role, joined_at) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role',
-      [email, hashedPassword, name, 'freelancer', new Date()]
+      [email, hashedPassword, name, 'user', new Date()]
     );
     
     const user = result.rows[0];

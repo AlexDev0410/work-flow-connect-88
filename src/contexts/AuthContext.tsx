@@ -11,7 +11,7 @@ export type UserType = {
   photoURL?: string;
   bio?: string;
   skills?: string[];
-  role: 'freelancer' | 'client';
+  role: string;
   savedJobs?: string[];
   hourlyRate?: number;
   joinedAt?: number;

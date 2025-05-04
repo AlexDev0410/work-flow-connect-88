@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
   name VARCHAR(255) NOT NULL,
-  role VARCHAR(50) NOT NULL DEFAULT 'freelancer',
+  role VARCHAR(50) NOT NULL DEFAULT 'user',
   bio TEXT,
   skills TEXT[] DEFAULT '{}',
   photo_url TEXT,
@@ -81,7 +81,8 @@ CREATE OR REPLACE FUNCTION update_chat_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
   UPDATE chats 
-  SET updated_at = CURRENT_TIMESTAMP 
+  SET updated_at = CURRENT_TIMESTAMP,
+      last_message = NEW.id
   WHERE id = NEW.chat_id;
   RETURN NEW;
 END;
@@ -92,7 +93,3 @@ CREATE TRIGGER trigger_update_chat_timestamp
 AFTER INSERT ON messages
 FOR EACH ROW
 EXECUTE FUNCTION update_chat_timestamp();
-
--- Datos de ejemplo (opcional)
--- INSERT INTO users (email, password, name, role) 
--- VALUES ('admin@example.com', '$2b$10$abcdefghijklmnopqrstuv', 'Admin User', 'admin');
