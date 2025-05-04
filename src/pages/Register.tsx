@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from '@/components/ui/use-toast';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -41,10 +42,20 @@ const Register = () => {
       setLoading(true);
       console.log('Registrando usuario con:', { email, password, name });
       await register(email, password, name);
-      // Registration successful, user will be redirected to dashboard by the auth provider
+      
+      toast({
+        title: "Registro exitoso",
+        description: "Tu cuenta ha sido creada correctamente",
+      });
     } catch (error) {
       console.error('Error de registro:', error);
       setError(error instanceof Error ? error.message : 'Error al registrar. Intenta más tarde.');
+      
+      toast({
+        variant: "destructive",
+        title: "Error de registro",
+        description: error instanceof Error ? error.message : 'Error al registrar. Intenta más tarde.',
+      });
     } finally {
       setLoading(false);
     }

@@ -77,7 +77,10 @@ const initDatabase = async () => {
   try {
     console.log('Comprobando estado de la base de datos...');
     
-    // Verificar si la base de datos ya está inicializada
+    // Verificar si podemos conectar a la base de datos
+    await pool.query('SELECT NOW()');
+    
+    // Verificar si la tabla users existe
     const tableCheckResult = await pool.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -88,34 +91,90 @@ const initDatabase = async () => {
     const tablesExist = tableCheckResult.rows[0].exists;
     
     if (!tablesExist) {
-      console.log('Inicializando base de datos...');
+      console.log('Inicializando base de datos desde cero...');
       
       // Leer y ejecutar archivo SQL
       const sql = fs.readFileSync(path.join(__dirname, 'db.sql'), 'utf8');
       
-      await pool.query(sql);
+      // Dividir el SQL en declaraciones individuales para poder ejecutarlas una por una
+      const statements = sql.split(';').filter(statement => statement.trim() !== '');
+      
+      for (const statement of statements) {
+        if (statement.trim()) {
+          await pool.query(statement + ';');
+        }
+      }
       
       console.log('Base de datos inicializada correctamente');
     } else {
       console.log('La base de datos ya está inicializada');
+      
+      // Verificar si las tablas categories y skills existen
+      const categoriesCheckResult = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'categories'
+        )`
+      );
+      
+      if (!categoriesCheckResult.rows[0].exists) {
+        console.log('Creando tablas categories y skills...');
+        
+        // Extraer solo las partes relevantes del SQL para categories y skills
+        const sql = fs.readFileSync(path.join(__dirname, 'db.sql'), 'utf8');
+        const createCategoriesPattern = /CREATE TABLE IF NOT EXISTS categories[\s\S]*?;/g;
+        const createSkillsPattern = /CREATE TABLE IF NOT EXISTS skills[\s\S]*?;/g;
+        const insertCategoriesPattern = /INSERT INTO categories[\s\S]*?;/g;
+        const insertSkillsPattern = /INSERT INTO skills[\s\S]*?;/g;
+        
+        const createCategoriesMatch = sql.match(createCategoriesPattern);
+        const createSkillsMatch = sql.match(createSkillsPattern);
+        const insertCategoriesMatch = sql.match(insertCategoriesPattern);
+        const insertSkillsMatch = sql.match(insertSkillsPattern);
+        
+        if (createCategoriesMatch) {
+          console.log('Creando tabla categories...');
+          await pool.query(createCategoriesMatch[0]);
+        }
+        
+        if (createSkillsMatch) {
+          console.log('Creando tabla skills...');
+          await pool.query(createSkillsMatch[0]);
+        }
+        
+        if (insertCategoriesMatch) {
+          console.log('Insertando datos en categories...');
+          await pool.query(insertCategoriesMatch[0]);
+        }
+        
+        if (insertSkillsMatch) {
+          console.log('Insertando datos en skills...');
+          await pool.query(insertSkillsMatch[0]);
+        }
+        
+        console.log('Tablas categories y skills creadas correctamente');
+      }
     }
   } catch (error) {
     console.error('Error al inicializar la base de datos:', error);
     console.error('Detalles:', error.stack);
     
-    // Verificar si es un error de conexión
     if (error.code === 'ECONNREFUSED') {
       console.error('No se pudo conectar a PostgreSQL. Verifique que el servicio esté en ejecución.');
-    }
-    
-    // Verificar si es un error de autenticación
-    if (error.code === '28P01') {
+    } else if (error.code === '28P01') {
       console.error('Error de autenticación. Verifique las credenciales en DATABASE_URL.');
-    }
-    
-    // Verificar si es un error de base de datos no existente
-    if (error.code === '3D000') {
+    } else if (error.code === '3D000') {
       console.error('La base de datos no existe. Créela manualmente o modifique DATABASE_URL.');
+    } else if (error.code === '42P01') {
+      console.error('Error de relación inexistente. Intentando crear tablas...');
+      try {
+        // Intentar crear todas las tablas desde cero
+        const sql = fs.readFileSync(path.join(__dirname, 'db.sql'), 'utf8');
+        await pool.query(sql);
+        console.log('Base de datos recuperada correctamente');
+      } catch (innerError) {
+        console.error('Error al recuperar la base de datos:', innerError);
+      }
     }
   }
 };

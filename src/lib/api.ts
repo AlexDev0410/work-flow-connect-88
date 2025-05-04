@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -16,12 +17,16 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log(`Enviando solicitud a: ${config.baseURL}${config.url}`);
   return config;
 });
 
 // Interceptor para manejar errores comunes
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`Respuesta recibida de ${response.config.url}:`, response.status);
+    return response;
+  },
   (error) => {
     console.log('API error:', error.response?.data || error.message);
     
@@ -44,7 +49,9 @@ api.interceptors.response.use(
 // Funciones de autenticación
 export const loginUser = async (email: string, password: string) => {
   try {
+    console.log('Iniciando sesión con:', { email });
     const response = await api.post('/auth/login', { email, password });
+    console.log('Login exitoso:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error en loginUser:', error);
@@ -56,6 +63,7 @@ export const registerUser = async (email: string, password: string, name: string
   try {
     console.log('Enviando datos de registro:', { email, name });
     const response = await api.post('/auth/register', { email, password, name });
+    console.log('Registro exitoso:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error en registerUser:', error);
