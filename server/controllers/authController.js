@@ -6,18 +6,28 @@ const { pool } = require('../config/db');
 // Registro de usuario
 exports.register = async (req, res) => {
   try {
+    console.log('Solicitud de registro recibida:', req.body);
+    
     const { email, password, name } = req.body;
+    
+    if (!email || !password || !name) {
+      console.log('Error: Datos incompletos');
+      return res.status(400).json({ error: 'Todos los campos son obligatorios' });
+    }
     
     // Verificar si el usuario ya existe
     const userExists = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     
     if (userExists.rows.length > 0) {
+      console.log('Error: Usuario ya existe');
       return res.status(400).json({ error: 'El usuario ya existe' });
     }
     
     // Encriptar contraseña
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
+    
+    console.log('Creando usuario con rol: user');
     
     // Crear usuario - establecer un único rol para todos
     const result = await pool.query(
@@ -26,6 +36,7 @@ exports.register = async (req, res) => {
     );
     
     const user = result.rows[0];
+    console.log('Usuario creado exitosamente:', user);
     
     // Generar token JWT
     const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
@@ -43,7 +54,7 @@ exports.register = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en registro:', error);
-    res.status(500).json({ error: 'Error en el servidor' });
+    res.status(500).json({ error: 'Error en el servidor al registrar usuario' });
   }
 };
 

@@ -68,13 +68,15 @@ app.get('/api/health', (req, res) => {
 
 // Manejador de errores global
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Error global:', err.stack);
   res.status(500).json({ error: 'Error en el servidor' });
 });
 
 // Inicializar la base de datos
 const initDatabase = async () => {
   try {
+    console.log('Comprobando estado de la base de datos...');
+    
     // Verificar si la base de datos ya está inicializada
     const tableCheckResult = await pool.query(`
       SELECT EXISTS (
@@ -99,6 +101,22 @@ const initDatabase = async () => {
     }
   } catch (error) {
     console.error('Error al inicializar la base de datos:', error);
+    console.error('Detalles:', error.stack);
+    
+    // Verificar si es un error de conexión
+    if (error.code === 'ECONNREFUSED') {
+      console.error('No se pudo conectar a PostgreSQL. Verifique que el servicio esté en ejecución.');
+    }
+    
+    // Verificar si es un error de autenticación
+    if (error.code === '28P01') {
+      console.error('Error de autenticación. Verifique las credenciales en DATABASE_URL.');
+    }
+    
+    // Verificar si es un error de base de datos no existente
+    if (error.code === '3D000') {
+      console.error('La base de datos no existe. Créela manualmente o modifique DATABASE_URL.');
+    }
   }
 };
 

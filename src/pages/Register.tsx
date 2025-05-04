@@ -39,11 +39,12 @@ const Register = () => {
     
     try {
       setLoading(true);
+      console.log('Registrando usuario con:', { email, password, name });
       await register(email, password, name);
       // Registration successful, user will be redirected to dashboard by the auth provider
     } catch (error) {
       console.error('Error de registro:', error);
-      setError(error instanceof Error ? error.message : 'Error al registrar');
+      setError(error instanceof Error ? error.message : 'Error al registrar. Intenta más tarde.');
     } finally {
       setLoading(false);
     }

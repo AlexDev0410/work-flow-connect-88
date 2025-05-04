@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -24,25 +23,44 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.log('API error:', error.response?.data || error.message);
+    
     // Si el error es 401 (No autorizado), redireccionar al login
     if (error.response && error.response.status === 401) {
       // Limpiar token y redirigir a login
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
+    
+    if (error.response && error.response.data && error.response.data.error) {
+      // Usamos el mensaje de error del backend si está disponible
+      return Promise.reject(new Error(error.response.data.error));
+    }
+    
     return Promise.reject(error);
   }
 );
 
 // Funciones de autenticación
 export const loginUser = async (email: string, password: string) => {
-  const response = await api.post('/auth/login', { email, password });
-  return response.data;
+  try {
+    const response = await api.post('/auth/login', { email, password });
+    return response.data;
+  } catch (error) {
+    console.error('Error en loginUser:', error);
+    throw error;
+  }
 };
 
 export const registerUser = async (email: string, password: string, name: string) => {
-  const response = await api.post('/auth/register', { email, password, name });
-  return response.data;
+  try {
+    console.log('Enviando datos de registro:', { email, name });
+    const response = await api.post('/auth/register', { email, password, name });
+    return response.data;
+  } catch (error) {
+    console.error('Error en registerUser:', error);
+    throw error;
+  }
 };
 
 export const getCurrentUser = async () => {
